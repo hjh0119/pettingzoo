@@ -107,6 +107,9 @@ env = make_env(raw_env)
 parallel_env = parallel_wrapper_fn(env)
 
 
+# 障碍固定位置
+landmark_pos = [np.array([np.float32(1.0),np.float32(0.3)]), np.array([np.float32(-0.7),np.float32(-1.0)])]
+
 class Scenario(BaseScenario):
     def make_world(self, num_good=1, num_adversaries=3, num_obstacles=2):
         world = World()
@@ -134,7 +137,7 @@ class Scenario(BaseScenario):
             landmark.name = "landmark %d" % i
             landmark.collide = True
             landmark.movable = False
-            landmark.size = 0.2
+            landmark.size = 0.15
             landmark.boundary = False
         return world
 
@@ -149,15 +152,24 @@ class Scenario(BaseScenario):
             # random properties for landmarks
         for i, landmark in enumerate(world.landmarks):
             landmark.color = np.array([0.25, 0.25, 0.25])
-        # set random initial states
-        for agent in world.agents:
-            agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
-            agent.state.p_vel = np.zeros(world.dim_p)
-            agent.state.c = np.zeros(world.dim_c)
+            
+        # 修改生成顺序, 先生成障碍
         for i, landmark in enumerate(world.landmarks):
             if not landmark.boundary:
-                landmark.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
+                # 修改为固定位置
+                # landmark.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
+                landmark.state.p_pos = landmark_pos[i]
                 landmark.state.p_vel = np.zeros(world.dim_p)
+
+        # set random initial states
+        for agent in world.agents:
+            # if not agent.adversary: agent.state.p_pos = np.array([np.float32(1.5),np.float32(-1.5)])
+            agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
+            while self.is_collision_with_landmark(world, agent):
+                agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
+            
+            agent.state.p_vel = np.zeros(world.dim_p)
+            agent.state.c = np.zeros(world.dim_c)
 
     def benchmark_data(self, agent, world):
         # returns data for benchmarking purposes
@@ -269,3 +281,11 @@ class Scenario(BaseScenario):
             + other_pos
             + other_vel
         )
+
+    def target_location(self):
+        return self.good_agents[0].state.p_pos
+    
+    def is_collision_with_landmark(self, world, agent):
+        for landmark in world.landmarks:
+            if self.is_collision(agent, landmark): return True
+        return False

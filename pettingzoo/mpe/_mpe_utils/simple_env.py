@@ -83,7 +83,8 @@ class SimpleEnv(AECEnv):
         state_dim = 0
         for agent in self.world.agents:
             if agent.movable:
-                space_dim = self.world.dim_p * 2 + 1
+                # space_dim = self.world.dim_p * 2 + 1
+                space_dim = self.world.n ** 2
             elif self.continuous_actions:
                 space_dim = 0
             else:
@@ -209,6 +210,7 @@ class SimpleEnv(AECEnv):
                 agent.action.u[1] += action[0][3] - action[0][4]
             else:
                 # process discrete action
+                action = self._select_action(action[0], agent)
                 if action[0] == 1:
                     agent.action.u[0] = -1.0
                 if action[0] == 2:
@@ -341,3 +343,54 @@ class SimpleEnv(AECEnv):
         if self.screen is not None:
             pygame.quit()
             self.screen = None
+
+    def _select_action(self, index, agent):
+        if not agent.adversary: return [0] # 固定target
+        target_cord = self.world.key_points(index)
+        agent_cord = agent.state.p_pos + agent.state.p_vel * self.world.dt # 控制逻辑: 先以当前速度位移
+        agent_next_vel = agent.state.p_vel * (1 - self.world.damping) # 速度衰减, 并根据动作调节速度, 影响下一时刻的位移
+        action_list = [np.array([0.0, 0.0]),
+              np.array([-1.0, 0.0]),
+              np.array([1.0, 0.0]),
+              np.array([0.0, -1.0]),
+              np.array([0.0, 1.0])]
+        min_dis = 1e9
+        best_action = -1
+        for i, action in enumerate(action_list) :
+            action *= agent.accel # p_force
+            tmp_agent_next_vel = agent_next_vel + (action / agent.mass) * self.world.dt
+            agent_next_cord = agent_cord + tmp_agent_next_vel * self.world.dt
+            if self._is_collision(agent, agent_next_cord): continue
+            dis = np.sqrt(np.sum(np.square(target_cord - agent_next_cord)))
+            if dis < min_dis:
+                best_action = i
+                min_dis = dis
+        '''
+        现在的控制算法比较简单, 会出现所有方向都与障碍碰撞, 猜测是因为惯性?
+        1. 调小了障碍大小
+        2. 都碰撞时仍选择距离最小的
+        '''
+        if best_action == -1:
+            # print("None!")
+            for i, action in enumerate(action_list) :
+                action *= agent.accel # p_force
+                tmp_agent_next_vel = agent_next_vel + (action / agent.mass) * self.world.dt
+                agent_next_cord = agent_cord + tmp_agent_next_vel * self.world.dt
+                dis = np.sqrt(np.sum(np.square(target_cord - agent_next_cord)))
+                if dis < min_dis:
+                    best_action = i
+                    min_dis = dis
+        return [best_action]
+            
+            
+            
+    def _is_collision(self, agent, pos):
+        for landmark in self.world.landmarks:
+            delta_pos = landmark.state.p_pos - pos
+            dist = np.sqrt(np.sum(np.square(delta_pos)))
+            dist_min = landmark.size + agent.size
+            if dist < dist_min: return True
+        return False
+    
+    # def distance(self, target_pos, pos):
+    #     return np.sqrt(np.sum(np.square(target_pos - pos)))

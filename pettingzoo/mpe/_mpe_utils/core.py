@@ -99,7 +99,15 @@ class World:  # multi-agent world
         # contact response parameters
         self.contact_force = 1e2
         self.contact_margin = 1e-3
+        self.n = 3 # 9宫格 = 3 * 3
+        self.points = np.linspace(-1.5, 1.5, self.n)
+        
 
+    # @property
+    def key_points(self, index): # index: 0~8
+        row = index // self.n
+        col = index % self.n
+        return np.array([self.points[row], self.points[col]])
     # return all entities in the world
     @property
     def entities(self):
@@ -216,3 +224,7 @@ class World:  # multi-agent world
         force_a = +force if entity_a.movable else None
         force_b = -force if entity_b.movable else None
         return [force_a, force_b]
+
+    def choose_action(self, agent,target_x,target_y):
+        # 检查四个方位
+        pass
